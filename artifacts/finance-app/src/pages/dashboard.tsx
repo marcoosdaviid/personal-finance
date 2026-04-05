@@ -1,196 +1,127 @@
-import { format, subMonths } from "date-fns";
 import { useMemo, useState } from "react";
-import { 
-  useGetDashboardSummary, 
-  getGetDashboardSummaryQueryKey,
-  useGetMonthlyTrend,
-  useGetSpendingByCategory,
-  useListTransactions
-} from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar, Legend
-} from "recharts";
-import { ArrowDownRight, ArrowUpRight, Wallet, Activity, CreditCard } from "lucide-react";
+import { addMonths, format, parse } from "date-fns";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { useFinanceStore } from "@/hooks/use-finance-store";
+import { buildProjection, computeMonth, getCurrentMonth, monthLabel } from "@/lib/finance";
+
+const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function Dashboard() {
-  const currentMonth = format(new Date(), "yyyy-MM");
-  const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary({ month: currentMonth });
-  const { data: trend, isLoading: isLoadingTrend } = useGetMonthlyTrend();
-  const { data: spending, isLoading: isLoadingSpending } = useGetSpendingByCategory({ month: currentMonth });
-  const { data: transactions, isLoading: isLoadingTransactions } = useListTransactions({ limit: 5 });
+  const { data } = useFinanceStore();
+  const currentMonth = getCurrentMonth();
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [projectionSize, setProjectionSize] = useState<"6" | "12">("6");
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val);
+  const monthOptions = useMemo(() => {
+    const start = parse(`${currentMonth}-01`, "yyyy-MM-dd", new Date());
+    return Array.from({ length: 24 }).map((_, idx) => format(addMonths(start, idx - 6), "yyyy-MM"));
+  }, [currentMonth]);
+
+  const selectedSummary = useMemo(() => computeMonth(data, selectedMonth), [data, selectedMonth]);
+
+  const projection = useMemo(
+    () => buildProjection(data, selectedMonth, Number(projectionSize)).map((m) => ({
+      ...m,
+      label: format(parse(`${m.month}-01`, "yyyy-MM-dd", new Date()), "MMM/yy"),
+    })),
+    [data, projectionSize, selectedMonth],
+  );
+
+  const accumulatedBalance = projection.reduce((sum, m) => sum + m.balance, 0);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
-        <p className="text-muted-foreground mt-1">Here's your financial summary for {format(new Date(), "MMMM yyyy")}.</p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Planejamento Financeiro</h1>
+          <p className="text-muted-foreground">Resumo mensal + projeção futura de saldo.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="Selecione o mês" />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((month) => (
+                <SelectItem key={month} value={month}>
+                  {monthLabel(month)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard 
-          title="Total Balance" 
-          value={summary?.totalBalance} 
-          icon={Wallet} 
-          isLoading={isLoadingSummary} 
-        />
-        <StatCard 
-          title="Monthly Income" 
-          value={summary?.monthlyIncome} 
-          icon={ArrowUpRight} 
-          isLoading={isLoadingSummary} 
-          trend="positive"
-        />
-        <StatCard 
-          title="Monthly Expenses" 
-          value={summary?.monthlyExpenses} 
-          icon={ArrowDownRight} 
-          isLoading={isLoadingSummary} 
-          trend="negative"
-        />
-        <StatCard 
-          title="Net Savings" 
-          value={summary?.netSavings} 
-          icon={Activity} 
-          isLoading={isLoadingSummary} 
-        />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Custo total do mês" value={selectedSummary.costTotal} subtitle={`Débito ${currency.format(selectedSummary.debitCosts)} • Cartão ${currency.format(selectedSummary.creditCosts)}`} />
+        <MetricCard title="Receita total do mês" value={selectedSummary.incomeTotal} subtitle={`Fixa ${currency.format(selectedSummary.fixedSalary)} • Extras ${currency.format(selectedSummary.extraIncome)}`} positive />
+        <MetricCard title="Saldo do mês" value={selectedSummary.balance} subtitle={monthLabel(selectedMonth)} positive={selectedSummary.balance >= 0} />
+        <MetricCard title="Saldo acumulado" value={accumulatedBalance} subtitle={`Próximos ${projectionSize} meses`} positive={accumulatedBalance >= 0} />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="lg:col-span-4 border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Income vs Expenses</CardTitle>
-            <CardDescription>Your cash flow over the last 6 months</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingTrend ? (
-              <Skeleton className="h-[300px] w-full" />
-            ) : (
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tickFormatter={(val) => format(new Date(val + "-01"), "MMM")} axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `$${val / 1000}k`} />
-                    <Tooltip 
-                      formatter={(value: number) => formatCurrency(value)}
-                      cursor={{ fill: 'hsl(var(--muted))' }}
-                      contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
-                    />
-                    <Legend />
-                    <Bar dataKey="income" name="Income" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="expenses" name="Expenses" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-3 border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Spending by Category</CardTitle>
-            <CardDescription>Where your money went this month</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingSpending ? (
-              <Skeleton className="h-[300px] w-full" />
-            ) : spending && spending.length > 0 ? (
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={spending}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="amount"
-                    >
-                      {spending.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.categoryColor || `hsl(var(--chart-${(index % 5) + 1}))`} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    <Legend layout="horizontal" verticalAlign="bottom" align="center" />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-[300px] w-full flex items-center justify-center text-muted-foreground">
-                No spending data this month.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-border/50 shadow-sm">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Recent Transactions</CardTitle>
-            <CardDescription>Your latest financial activity</CardDescription>
+            <CardTitle>Projeção futura</CardTitle>
+            <CardDescription>Considera custos fixos, parcelamentos, recorrências, salário e extras cadastrados.</CardDescription>
           </div>
+          <Tabs value={projectionSize} onValueChange={(v) => setProjectionSize(v as "6" | "12")}>
+            <TabsList>
+              <TabsTrigger value="6">6 meses</TabsTrigger>
+              <TabsTrigger value="12">12 meses</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </CardHeader>
         <CardContent>
-          {isLoadingTransactions ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
-            </div>
-          ) : transactions && transactions.length > 0 ? (
-            <div className="space-y-4">
-              {transactions.map(tx => (
-                <div key={tx.id} className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border/50">
-                  <div className="flex items-center gap-4">
-                    <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white"
-                      style={{ backgroundColor: tx.categoryColor || 'hsl(var(--primary))' }}
-                    >
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">{tx.categoryName} • {tx.accountName} • {format(new Date(tx.date), "MMM d, yyyy")}</p>
-                    </div>
-                  </div>
-                  <div className={`font-semibold ${tx.type === 'income' ? 'text-green-600 dark:text-green-400' : ''}`}>
-                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
-                  </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={projection}>
+                <defs>
+                  <linearGradient id="saldo" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.45} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.03} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="label" />
+                <YAxis tickFormatter={(v) => currency.format(v)} width={90} />
+                <Tooltip formatter={(value: number) => currency.format(value)} />
+                <Area type="monotone" dataKey="balance" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#saldo)" name="Saldo" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {projection.map((month) => (
+              <div key={month.month} className="rounded-lg border p-3 bg-card">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">{monthLabel(month.month)}</p>
+                  <Badge variant={month.balance >= 0 ? "default" : "destructive"}>{month.balance >= 0 ? "Positivo" : "Negativo"}</Badge>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-8 text-center text-muted-foreground">
-              No recent transactions.
-            </div>
-          )}
+                <p className="text-sm text-muted-foreground">Receita: {currency.format(month.incomeTotal)}</p>
+                <p className="text-sm text-muted-foreground">Custos: {currency.format(month.costTotal)}</p>
+                <p className="text-base font-semibold mt-1">Saldo: {currency.format(month.balance)}</p>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function StatCard({ title, value, icon: Icon, isLoading, trend }: { title: string, value?: number, icon: any, isLoading: boolean, trend?: "positive" | "negative" }) {
+function MetricCard({ title, value, subtitle, positive }: { title: string; value: number; subtitle?: string; positive?: boolean }) {
   return (
-    <Card className="border-border/50 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{title}</CardDescription>
+        <CardTitle className={`text-2xl ${positive === undefined ? "" : positive ? "text-emerald-600" : "text-red-600"}`}>{currency.format(value)}</CardTitle>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <Skeleton className="h-8 w-24" />
-        ) : (
-          <div className={`text-2xl font-bold ${trend === 'positive' ? 'text-green-600 dark:text-green-400' : trend === 'negative' ? 'text-red-600 dark:text-red-400' : ''}`}>
-            {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0)}
-          </div>
-        )}
-      </CardContent>
+      {subtitle ? <CardContent className="pt-0 text-xs text-muted-foreground">{subtitle}</CardContent> : null}
     </Card>
   );
 }

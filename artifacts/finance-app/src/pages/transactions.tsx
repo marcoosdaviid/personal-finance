@@ -1,270 +1,185 @@
-import { useListTransactions, useListAccounts, useListCategories, useCreateTransaction } from "@workspace/api-client-react";
-import { useState } from "react";
-import { format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, CreditCard, Filter } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useFinanceStore } from "@/hooks/use-finance-store";
+import { CostEntry, getCurrentMonth, monthLabel, uid } from "@/lib/finance";
 
-const formSchema = z.object({
-  description: z.string().min(1, "Description is required"),
-  amount: z.coerce.number().positive("Amount must be positive"),
-  type: z.enum(["income", "expense"]),
-  accountId: z.coerce.number({ required_error: "Account is required" }),
-  categoryId: z.coerce.number().optional(),
-  date: z.string().min(1, "Date is required"),
-  notes: z.string().optional()
-});
+const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+type CostForm = Omit<CostEntry, "id">;
+
+const emptyForm: CostForm = {
+  name: "",
+  amount: 0,
+  paymentType: "debit" as const,
+  nature: "fixed" as const,
+  category: "",
+  referenceMonth: getCurrentMonth(),
+  recurrenceMonths: 1,
+  durationMonths: 1,
+  notes: "",
+};
 
 export default function Transactions() {
-  const [filterType, setFilterType] = useState<string>("all");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const { data, setData } = useFinanceStore();
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
+  const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<CostForm>(emptyForm);
 
-  const { data: transactions, isLoading } = useListTransactions({ 
-    type: filterType !== "all" ? (filterType as "income" | "expense") : undefined
-  });
-  
-  const { data: accounts } = useListAccounts();
-  const { data: categories } = useListCategories();
-  
-  const createMutation = useCreateTransaction();
+  const monthCosts = useMemo(
+    () => data.costs.filter((c) => c.referenceMonth <= selectedMonth),
+    [data.costs, selectedMonth],
+  );
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      description: "",
-      amount: 0,
-      type: "expense",
-      date: format(new Date(), "yyyy-MM-dd"),
-      notes: ""
-    }
-  });
+  const sorted = [...monthCosts].sort((a, b) => b.referenceMonth.localeCompare(a.referenceMonth));
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    createMutation.mutate({ data: values }, {
-      onSuccess: () => {
-        setIsDialogOpen(false);
-        form.reset();
-        queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/summary"] });
-        toast({ title: "Transaction added successfully" });
-      },
-      onError: (err) => {
-        toast({ title: "Error adding transaction", variant: "destructive" });
-      }
-    });
+  const resetForm = () => {
+    setForm(emptyForm);
+    setEditingId(null);
   };
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val);
+  const saveCost = () => {
+    const payload: CostEntry = {
+      id: editingId ?? uid(),
+      ...form,
+      amount: Number(form.amount),
+      recurrenceMonths: Number(form.recurrenceMonths),
+      durationMonths: Number(form.durationMonths),
+    };
+
+    if (!payload.name || !payload.category || payload.amount <= 0) return;
+
+    setData((prev) => ({
+      ...prev,
+      costs: editingId ? prev.costs.map((c) => (c.id === editingId ? payload : c)) : [payload, ...prev.costs],
+    }));
+
+    setIsOpen(false);
+    resetForm();
+  };
+
+  const editCost = (cost: CostEntry) => {
+    setEditingId(cost.id);
+    setForm(cost);
+    setIsOpen(true);
+  };
+
+  const deleteCost = (id: string) => {
+    setData((prev) => ({ ...prev, costs: prev.costs.filter((c) => c.id !== id) }));
+  };
+
+  const totalMonth = sorted.filter((c) => c.referenceMonth === selectedMonth).reduce((sum, c) => sum + c.amount, 0);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-muted-foreground mt-1">View and manage your transaction history.</p>
+          <h1 className="text-3xl font-bold">Custos / Despesas</h1>
+          <p className="text-muted-foreground">Cadastre custos fixos, pontuais, em débito ou cartão, com duração e recorrência.</p>
         </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" /> Add Transaction
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add Transaction</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="expense">Expense</SelectItem>
-                          <SelectItem value="income">Income</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Amount</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+        <div className="flex gap-2">
+          <Input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-[180px]" />
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm}>
+                <Plus className="h-4 w-4 mr-2" /> Novo custo
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[640px]">
+              <DialogHeader>
+                <DialogTitle>{editingId ? "Editar custo" : "Novo custo"}</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <Label>Nome / descrição</Label>
+                  <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Groceries" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="accountId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Account</FormLabel>
-                      <Select onValueChange={(v) => field.onChange(Number(v))} defaultValue={field.value ? String(field.value) : undefined}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select account" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {accounts?.map(acc => (
-                            <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="categoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={(v) => field.onChange(Number(v))} defaultValue={field.value ? String(field.value) : undefined}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories?.map(cat => (
-                            <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Button type="submit" className="w-full" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? "Adding..." : "Add Transaction"}
-                </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                <div>
+                  <Label>Valor</Label>
+                  <Input type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label>Categoria</Label>
+                  <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Ex: Moradia" />
+                </div>
+                <div>
+                  <Label>Pagamento</Label>
+                  <Select value={form.paymentType} onValueChange={(v: "debit" | "credit") => setForm((f) => ({ ...f, paymentType: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debit">Débito</SelectItem>
+                      <SelectItem value="credit">Cartão de crédito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={form.nature} onValueChange={(v: "fixed" | "one_time") => setForm((f) => ({ ...f, nature: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">Fixo</SelectItem>
+                      <SelectItem value="one_time">Pontual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Mês de referência</Label>
+                  <Input type="month" value={form.referenceMonth} onChange={(e) => setForm((f) => ({ ...f, referenceMonth: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Recorrência (meses)</Label>
+                  <Input type="number" min={1} value={form.recurrenceMonths} onChange={(e) => setForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label>Quantidade de parcelas / duração</Label>
+                  <Input type="number" min={1} value={form.durationMonths} onChange={(e) => setForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))} />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+                </div>
+              </div>
+              <Button onClick={saveCost}>{editingId ? "Salvar alterações" : "Cadastrar custo"}</Button>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 pb-4">
-          <CardTitle>All Transactions</CardTitle>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-[120px] h-8 text-xs">
-                <SelectValue placeholder="Filter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
-                <SelectItem value="expense">Expense</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumo de {monthLabel(selectedMonth)}</CardTitle>
+          <CardDescription>Total do mês selecionado: {currency.format(totalMonth)}</CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-4">
-              {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-16 w-full" />)}
-            </div>
-          ) : transactions && transactions.length > 0 ? (
-            <div className="divide-y divide-border/50">
-              {transactions.map((tx, idx) => (
-                <div 
-                  key={tx.id} 
-                  className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
-                  style={{ animationDelay: `${idx * 50}ms` }}
-                >
-                  <div className="flex items-center gap-4">
-                    <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white"
-                      style={{ backgroundColor: tx.categoryColor || 'hsl(var(--primary))' }}
-                    >
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">{tx.categoryName || 'Uncategorized'} • {tx.accountName} • {format(new Date(tx.date), "MMM d, yyyy")}</p>
-                    </div>
-                  </div>
-                  <div className={`font-semibold ${tx.type === 'income' ? 'text-green-600 dark:text-green-400' : ''}`}>
-                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
-                  </div>
-                </div>
-              ))}
-            </div>
+        <CardContent className="space-y-3">
+          {sorted.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum custo cadastrado.</p>
           ) : (
-            <div className="p-12 text-center text-muted-foreground">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
-                <ReceiptText className="w-6 h-6" />
+            sorted.map((cost) => (
+              <div key={cost.id} className="rounded-lg border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-semibold">{cost.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {cost.category} • {cost.paymentType === "debit" ? "Débito" : "Cartão"} • {cost.nature === "fixed" ? "Fixo" : "Pontual"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração {cost.durationMonths} mês(es)
+                  </p>
+                  {cost.notes ? <p className="text-xs mt-1">Obs: {cost.notes}</p> : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-lg min-w-[130px] text-right">{currency.format(cost.amount)}</p>
+                  <Button variant="outline" size="icon" onClick={() => editCost(cost)}><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="destructive" size="icon" onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
               </div>
-              <p className="font-medium">No transactions found</p>
-              <p className="text-sm">Try adjusting your filters or add a new transaction.</p>
-            </div>
+            ))
           )}
         </CardContent>
       </Card>
