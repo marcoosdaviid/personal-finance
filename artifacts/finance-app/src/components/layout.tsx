@@ -1,14 +1,13 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, ReceiptText, PieChart, Wallet, Menu } from "lucide-react";
+import { LayoutDashboard, ReceiptText, WalletCards, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ReceiptText },
-  { href: "/budgets", label: "Budgets", icon: PieChart },
-  { href: "/accounts", label: "Accounts", icon: Wallet },
+  { href: "/transactions", label: "Despesas", icon: ReceiptText },
+  { href: "/incomes", label: "Receitas", icon: WalletCards },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -24,9 +23,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span
               onClick={() => setIsMobileMenuOpen(false)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               <item.icon className="h-5 w-5" />
@@ -40,15 +37,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-col border-r border-border bg-card">
         <div className="p-6">
           <Link href="/">
             <span className="flex items-center gap-2 text-xl font-bold tracking-tight text-primary cursor-pointer">
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground text-lg">F</span>
+                <span className="text-primary-foreground text-lg">R$</span>
               </div>
-              Finflow
+              Planeja Finanças
             </span>
           </Link>
         </div>
@@ -57,14 +53,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      {/* Mobile Header & Main Content */}
       <div className="flex-1 flex flex-col">
         <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-card">
           <div className="flex items-center gap-2 text-xl font-bold text-primary">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground text-lg">F</span>
+              <span className="text-primary-foreground text-sm font-semibold">R$</span>
             </div>
-            Finflow
+            Planeja Finanças
           </div>
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
@@ -74,12 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
               <div className="p-6">
-                <div className="flex items-center gap-2 text-xl font-bold text-primary">
-                  <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                    <span className="text-primary-foreground text-lg">F</span>
-                  </div>
-                  Finflow
-                </div>
+                <div className="flex items-center gap-2 text-xl font-bold text-primary">Planeja Finanças</div>
               </div>
               <nav className="px-4 space-y-1">
                 <NavLinks />
@@ -89,9 +79,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="flex-1 p-6 md:p-8 lg:p-10 overflow-auto">
-          <div className="max-w-6xl mx-auto">
-            {children}
-          </div>
+          <div className="max-w-6xl mx-auto">{children}</div>
         </main>
       </div>
     </div>
