@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFinanceStore } from "@/hooks/use-finance-store";
+import { useToast } from "@/hooks/use-toast";
 import { IncomeEntry, SalaryChange, getCurrentMonth, monthLabel, uid } from "@/lib/finance";
+import { parseChatEntry } from "@/lib/chat-entry-parser";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -26,9 +28,11 @@ const extraInitial: IncomeForm = {
 
 export default function Incomes() {
   const { data, setData } = useFinanceStore();
+  const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [extraForm, setExtraForm] = useState<IncomeForm>(extraInitial);
   const [salaryForm, setSalaryForm] = useState({ owner: "", effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
+  const [chatInput, setChatInput] = useState("");
   const groupedIncomes = data.incomes.reduce<Record<string, IncomeEntry[]>>((acc, income) => {
     const owner = income.owner || "Não informado";
     if (!acc[owner]) acc[owner] = [];
@@ -77,8 +81,70 @@ export default function Incomes() {
     setSalaryForm({ owner: "", effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
   };
 
+  const insertFromChat = () => {
+    try {
+      const parsed = parseChatEntry(chatInput);
+      if (parsed.kind === "cost") {
+        toast({
+          title: "Mensagem reconhecida como despesa",
+          description: "Use a página de despesas para lançar esse item via chat.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (parsed.kind === "salary") {
+        setData((prev) => ({
+          ...prev,
+          salaryHistory: [
+            ...prev.salaryHistory,
+            { id: uid(), ...parsed.payload, createdAt: new Date().toISOString() },
+          ].sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)),
+        }));
+        toast({
+          title: "Mudança salarial registrada",
+          description: `${parsed.payload.owner} • ${currency.format(parsed.payload.value)}`,
+        });
+      } else {
+        setData((prev) => ({
+          ...prev,
+          incomes: [{ id: uid(), ...parsed.payload }, ...prev.incomes],
+        }));
+        toast({
+          title: "Receita cadastrada por chat",
+          description: `${parsed.payload.name} • ${currency.format(parsed.payload.amount)}`,
+        });
+      }
+
+      setChatInput("");
+    } catch (error) {
+      toast({
+        title: "Não consegui interpretar a mensagem",
+        description: error instanceof Error ? error.message : "Inclua valor, tipo e dono na mensagem.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Lançamento por chat (LLM)</CardTitle>
+          <CardDescription>
+            Exemplo: &quot;Recebi bônus de R$ 1200 para Rute em abril de 2026&quot; ou &quot;Novo salário de R$ 8500 para David a partir de maio de 2026&quot;.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            placeholder="Digite a receita ou mudança salarial em linguagem natural..."
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+          />
+          <Button onClick={insertFromChat}>Inserir receita via chat</Button>
+        </CardContent>
+      </Card>
+
       <div>
         <h1 className="text-3xl font-bold">Receitas</h1>
         <p className="text-muted-foreground">Cadastre receitas fixas, adicionais, bônus e entradas pontuais com histórico de alterações salariais.</p>
