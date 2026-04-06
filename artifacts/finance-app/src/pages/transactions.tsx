@@ -22,7 +22,7 @@ const emptyForm: CostForm = {
   category: "",
   referenceMonth: getCurrentMonth(),
   recurrenceMonths: 1,
-  durationMonths: 1,
+  durationMonths: null,
   notes: "",
 };
 
@@ -56,7 +56,7 @@ export default function Transactions() {
       ...form,
       amount: Number(form.amount),
       recurrenceMonths: Number(form.recurrenceMonths),
-      durationMonths: Number(form.durationMonths),
+      durationMonths: form.durationMonths === null ? null : Number(form.durationMonths),
     };
 
     if (!payload.owner || !payload.name || !payload.category || payload.amount <= 0) return;
@@ -147,8 +147,30 @@ export default function Transactions() {
               <Input type="number" min={1} value={form.recurrenceMonths} onChange={(e) => setForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
             </div>
             <div>
-              <Label>Quantidade de parcelas / duração</Label>
-              <Input type="number" min={1} value={form.durationMonths} onChange={(e) => setForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))} />
+              <Label>Duração</Label>
+              <Select
+                value={form.durationMonths === null ? "infinite" : "finite"}
+                onValueChange={(value: "infinite" | "finite") =>
+                  setForm((f) => ({ ...f, durationMonths: value === "infinite" ? null : f.durationMonths ?? 1 }))
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="infinite">Infinita</SelectItem>
+                  <SelectItem value="finite">Definir duração</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Quantidade de parcelas / duração (meses)</Label>
+              <Input
+                type="number"
+                min={1}
+                disabled={form.durationMonths === null}
+                value={form.durationMonths ?? ""}
+                placeholder={form.durationMonths === null ? "Infinita" : "Ex: 12"}
+                onChange={(e) => setForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))}
+              />
             </div>
             <div className="md:col-span-2">
               <Label>Observações</Label>
@@ -184,7 +206,8 @@ export default function Transactions() {
                         {cost.category} • {cost.paymentType === "debit" ? "Débito" : "Cartão"} • {cost.nature === "fixed" ? "Fixo" : "Pontual"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração {cost.durationMonths} mês(es)
+                        Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração{" "}
+                        {cost.durationMonths === null ? "Infinita" : `${cost.durationMonths} mês(es)`}
                       </p>
                       {cost.notes ? <p className="text-xs mt-1">Obs: {cost.notes}</p> : null}
                     </div>
