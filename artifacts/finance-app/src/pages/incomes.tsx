@@ -123,10 +123,25 @@ export default function Incomes() {
                 <div key={owner} className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{owner}</p>
                   {changes.map((change) => (
-                    <div key={change.id} className="rounded-lg border p-3">
-                      <p className="font-medium">A partir de {monthLabel(change.effectiveMonth)}</p>
-                      <p className="text-lg font-semibold">{currency.format(change.value)}</p>
-                      {change.notes ? <p className="text-xs text-muted-foreground">{change.notes}</p> : null}
+                    <div key={change.id} className="rounded-lg border p-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">A partir de {monthLabel(change.effectiveMonth)}</p>
+                        <p className="text-lg font-semibold">{currency.format(change.value)}</p>
+                        {change.notes ? <p className="text-xs text-muted-foreground">{change.notes}</p> : null}
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={() =>
+                          setData((prev) => ({
+                            ...prev,
+                            salaryHistory: prev.salaryHistory.filter((salaryChange) => salaryChange.id !== change.id),
+                          }))
+                        }
+                        aria-label={`Remover mudança salarial de ${owner}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
