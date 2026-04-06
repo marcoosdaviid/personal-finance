@@ -14,7 +14,7 @@ export type CostEntry = {
   category: string;
   referenceMonth: string; // yyyy-MM
   recurrenceMonths: number;
-  durationMonths: number;
+  durationMonths: number | null;
   notes?: string;
 };
 
@@ -43,6 +43,7 @@ export type FinanceData = {
   costs: CostEntry[];
   incomes: IncomeEntry[];
   salaryHistory: SalaryChange[];
+  creditCardInvoiceOverrides: Record<string, number>;
 };
 
 const STORAGE_KEY = "finflow.v2.finance";
@@ -51,6 +52,7 @@ export const emptyFinanceData: FinanceData = {
   costs: [],
   incomes: [],
   salaryHistory: [],
+  creditCardInvoiceOverrides: {},
 };
 
 export function uid() {
@@ -63,11 +65,16 @@ export function loadFinanceData(): FinanceData {
     if (!raw) return emptyFinanceData;
     const parsed = JSON.parse(raw) as Partial<FinanceData>;
     return {
-      costs: (parsed.costs ?? []).map((cost) => ({ ...cost, owner: cost.owner ?? "Não informado" })),
+      costs: (parsed.costs ?? []).map((cost) => ({
+        ...cost,
+        owner: cost.owner ?? "Não informado",
+        durationMonths: cost.durationMonths ?? 1,
+      })),
       incomes: (parsed.incomes ?? []).map((income) => ({ ...income, owner: income.owner ?? "Não informado" })),
       salaryHistory: (parsed.salaryHistory ?? [])
         .map((salary) => ({ ...salary, owner: salary.owner ?? "Não informado" }))
         .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)),
+      creditCardInvoiceOverrides: parsed.creditCardInvoiceOverrides ?? {},
     };
   } catch {
     return emptyFinanceData;
@@ -86,13 +93,17 @@ export function monthLabel(month: string) {
   return format(parse(`${month}-01`, "yyyy-MM-dd", new Date()), "MMM yyyy");
 }
 
-function activeInMonth(startMonth: string, recurrenceMonths: number, durationMonths: number, targetMonth: string) {
+function activeInMonth(startMonth: string, recurrenceMonths: number, durationMonths: number | null, targetMonth: string) {
   const diff = differenceInCalendarMonths(
     parse(`${targetMonth}-01`, "yyyy-MM-dd", new Date()),
     parse(`${startMonth}-01`, "yyyy-MM-dd", new Date()),
   );
 
-  return diff >= 0 && diff < durationMonths && diff % Math.max(1, recurrenceMonths) === 0;
+  const recurrence = Math.max(1, recurrenceMonths);
+  const hasDurationLimit = typeof durationMonths === "number" && Number.isFinite(durationMonths) && durationMonths > 0;
+  if (diff < 0 || diff % recurrence !== 0) return false;
+  if (!hasDurationLimit) return true;
+  return diff < durationMonths;
 }
 
 export function computeMonth(data: FinanceData, month: string) {
@@ -119,19 +130,25 @@ export function computeMonth(data: FinanceData, month: string) {
   const costTotal = costs.reduce((sum, c) => sum + c.amount, 0);
   const debitCosts = costs.filter((c) => c.paymentType === "debit").reduce((sum, c) => sum + c.amount, 0);
   const creditCosts = costs.filter((c) => c.paymentType === "credit").reduce((sum, c) => sum + c.amount, 0);
+  const creditCardInvoiceOverride = data.creditCardInvoiceOverrides[month];
+  const effectiveCreditCosts = creditCardInvoiceOverride ?? creditCosts;
+  const effectiveCostTotal = debitCosts + effectiveCreditCosts;
 
   const extraIncome = extras.reduce((sum, i) => sum + i.amount, 0);
   const incomeTotal = fixedSalary + extraIncome;
 
   return {
     month,
-    costTotal,
+    costTotal: effectiveCostTotal,
     incomeTotal,
-    balance: incomeTotal - costTotal,
+    balance: incomeTotal - effectiveCostTotal,
     debitCosts,
     creditCosts,
+    effectiveCreditCosts,
+    creditCardInvoiceOverride,
     fixedSalary,
     extraIncome,
+    costs,
   };
 }
 
