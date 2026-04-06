@@ -43,7 +43,7 @@ export type FinanceData = {
   costs: CostEntry[];
   incomes: IncomeEntry[];
   salaryHistory: SalaryChange[];
-  manualCreditInvoices: Record<string, number>;
+  creditCardInvoiceOverrides: Record<string, number>;
 };
 
 const STORAGE_KEY = "finflow.v2.finance";
@@ -52,7 +52,7 @@ export const emptyFinanceData: FinanceData = {
   costs: [],
   incomes: [],
   salaryHistory: [],
-  manualCreditInvoices: {},
+  creditCardInvoiceOverrides: {},
 };
 
 export function uid() {
@@ -74,7 +74,7 @@ export function loadFinanceData(): FinanceData {
       salaryHistory: (parsed.salaryHistory ?? [])
         .map((salary) => ({ ...salary, owner: salary.owner ?? "Não informado" }))
         .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)),
-      manualCreditInvoices: parsed.manualCreditInvoices ?? {},
+      creditCardInvoiceOverrides: parsed.creditCardInvoiceOverrides ?? {},
     };
   } catch {
     return emptyFinanceData;
@@ -99,10 +99,11 @@ function activeInMonth(startMonth: string, recurrenceMonths: number, durationMon
     parse(`${startMonth}-01`, "yyyy-MM-dd", new Date()),
   );
 
-  const hasInfiniteDuration = durationMonths === null;
-  const withinDuration = hasInfiniteDuration ? true : diff < durationMonths;
-
-  return diff >= 0 && withinDuration && diff % Math.max(1, recurrenceMonths) === 0;
+  const recurrence = Math.max(1, recurrenceMonths);
+  const hasDurationLimit = typeof durationMonths === "number" && Number.isFinite(durationMonths) && durationMonths > 0;
+  if (diff < 0 || diff % recurrence !== 0) return false;
+  if (!hasDurationLimit) return true;
+  return diff < durationMonths;
 }
 
 export function computeMonth(data: FinanceData, month: string) {
@@ -126,43 +127,28 @@ export function computeMonth(data: FinanceData, month: string) {
     activeInMonth(i.referenceMonth, i.recurrenceMonths, i.durationMonths, month),
   );
 
-  const debitFixedCosts = costs
-    .filter((c) => c.paymentType === "debit" && c.nature === "fixed")
-    .reduce((sum, c) => sum + c.amount, 0);
-  const debitOneTimeCosts = costs
-    .filter((c) => c.paymentType === "debit" && c.nature === "one_time")
-    .reduce((sum, c) => sum + c.amount, 0);
-  const creditFixedCosts = costs
-    .filter((c) => c.paymentType === "credit" && c.nature === "fixed")
-    .reduce((sum, c) => sum + c.amount, 0);
-  const creditOneTimeCosts = costs
-    .filter((c) => c.paymentType === "credit" && c.nature === "one_time")
-    .reduce((sum, c) => sum + c.amount, 0);
-
-  const debitCosts = debitFixedCosts + debitOneTimeCosts;
-  const calculatedCreditCosts = creditFixedCosts + creditOneTimeCosts;
-  const manualCreditInvoice = data.manualCreditInvoices[month];
-  const creditCosts = manualCreditInvoice ?? calculatedCreditCosts;
-  const costTotal = debitCosts + creditCosts;
+  const costTotal = costs.reduce((sum, c) => sum + c.amount, 0);
+  const debitCosts = costs.filter((c) => c.paymentType === "debit").reduce((sum, c) => sum + c.amount, 0);
+  const creditCosts = costs.filter((c) => c.paymentType === "credit").reduce((sum, c) => sum + c.amount, 0);
+  const creditCardInvoiceOverride = data.creditCardInvoiceOverrides[month];
+  const effectiveCreditCosts = creditCardInvoiceOverride ?? creditCosts;
+  const effectiveCostTotal = debitCosts + effectiveCreditCosts;
 
   const extraIncome = extras.reduce((sum, i) => sum + i.amount, 0);
   const incomeTotal = fixedSalary + extraIncome;
 
   return {
     month,
-    costTotal,
+    costTotal: effectiveCostTotal,
     incomeTotal,
-    balance: incomeTotal - costTotal,
+    balance: incomeTotal - effectiveCostTotal,
     debitCosts,
     creditCosts,
-    calculatedCreditCosts,
-    manualCreditInvoice,
-    debitFixedCosts,
-    debitOneTimeCosts,
-    creditFixedCosts,
-    creditOneTimeCosts,
+    effectiveCreditCosts,
+    creditCardInvoiceOverride,
     fixedSalary,
     extraIncome,
+    costs,
   };
 }
 

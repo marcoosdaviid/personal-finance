@@ -197,31 +197,27 @@ export default function Transactions() {
               <Label>Recorrência (meses)</Label>
               <Input type="number" min={1} value={form.recurrenceMonths} onChange={(e) => setForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
             </div>
-            <div>
-              <Label>Duração</Label>
-              <Select
-                value={form.durationMonths === null ? "infinite" : "finite"}
-                onValueChange={(value: "infinite" | "finite") =>
-                  setForm((f) => ({ ...f, durationMonths: value === "infinite" ? null : f.durationMonths ?? 1 }))
-                }
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="infinite">Infinita</SelectItem>
-                  <SelectItem value="finite">Definir duração</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Quantidade de parcelas / duração (meses)</Label>
+            <div className="space-y-2">
+              <Label>Quantidade de parcelas / duração</Label>
               <Input
                 type="number"
                 min={1}
                 disabled={form.durationMonths === null}
                 value={form.durationMonths ?? ""}
-                placeholder={form.durationMonths === null ? "Infinita" : "Ex: 12"}
-                onChange={(e) => setForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))}
+                placeholder={form.durationMonths === null ? "Recorrência infinita" : ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm((f) => ({ ...f, durationMonths: value ? Number(value) : 1 }));
+                }}
               />
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.durationMonths === null}
+                  onChange={(e) => setForm((f) => ({ ...f, durationMonths: e.target.checked ? null : 1 }))}
+                />
+                Recorrência infinita (sem quantidade de vezes)
+              </label>
             </div>
             <div className="md:col-span-2">
               <Label>Observações</Label>
