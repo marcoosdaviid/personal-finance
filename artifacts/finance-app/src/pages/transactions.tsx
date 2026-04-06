@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,7 +17,6 @@ const emptyForm: CostForm = {
   owner: "",
   name: "",
   amount: 0,
-  paid: false,
   paymentType: "debit" as const,
   nature: "fixed" as const,
   category: "",
@@ -80,13 +78,6 @@ export default function Transactions() {
     setData((prev) => ({ ...prev, costs: prev.costs.filter((c) => c.id !== id) }));
   };
 
-  const setPaid = (id: string, paid: boolean) => {
-    setData((prev) => ({
-      ...prev,
-      costs: prev.costs.map((cost) => (cost.id === id ? { ...cost, paid } : cost)),
-    }));
-  };
-
   const totalMonth = sorted.filter((c) => c.referenceMonth === selectedMonth).reduce((sum, c) => sum + c.amount, 0);
 
   return (
@@ -126,12 +117,6 @@ export default function Transactions() {
             <div>
               <Label>Categoria</Label>
               <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Ex: Moradia" />
-            </div>
-            <div className="flex items-end">
-              <Label className="flex items-center gap-2 mb-2">
-                <Checkbox checked={form.paid} onCheckedChange={(checked) => setForm((f) => ({ ...f, paid: checked === true }))} />
-                Despesa já paga
-              </Label>
             </div>
             <div>
               <Label>Pagamento</Label>
@@ -198,10 +183,6 @@ export default function Transactions() {
                       <p className="text-sm text-muted-foreground">
                         {cost.category} • {cost.paymentType === "debit" ? "Débito" : "Cartão"} • {cost.nature === "fixed" ? "Fixo" : "Pontual"}
                       </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Checkbox checked={cost.paid} onCheckedChange={(checked) => setPaid(cost.id, checked === true)} />
-                        <span className="text-xs text-muted-foreground">{cost.paid ? "Despesa paga" : "Despesa pendente"}</span>
-                      </div>
                       <p className="text-xs text-muted-foreground">
                         Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração {cost.durationMonths} mês(es)
                       </p>

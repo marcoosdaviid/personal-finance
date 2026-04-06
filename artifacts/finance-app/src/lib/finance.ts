@@ -9,7 +9,6 @@ export type CostEntry = {
   owner: string;
   name: string;
   amount: number;
-  paid: boolean;
   paymentType: PaymentType;
   nature: CostNature;
   category: string;
@@ -64,11 +63,7 @@ export function loadFinanceData(): FinanceData {
     if (!raw) return emptyFinanceData;
     const parsed = JSON.parse(raw) as Partial<FinanceData>;
     return {
-      costs: (parsed.costs ?? []).map((cost) => ({
-        ...cost,
-        owner: cost.owner ?? "Não informado",
-        paid: cost.paid ?? false,
-      })),
+      costs: (parsed.costs ?? []).map((cost) => ({ ...cost, owner: cost.owner ?? "Não informado" })),
       incomes: (parsed.incomes ?? []).map((income) => ({ ...income, owner: income.owner ?? "Não informado" })),
       salaryHistory: (parsed.salaryHistory ?? [])
         .map((salary) => ({ ...salary, owner: salary.owner ?? "Não informado" }))
@@ -122,7 +117,6 @@ export function computeMonth(data: FinanceData, month: string) {
   );
 
   const costTotal = costs.reduce((sum, c) => sum + c.amount, 0);
-  const paidCostTotal = costs.filter((c) => c.paid).reduce((sum, c) => sum + c.amount, 0);
   const debitCosts = costs.filter((c) => c.paymentType === "debit").reduce((sum, c) => sum + c.amount, 0);
   const creditCosts = costs.filter((c) => c.paymentType === "credit").reduce((sum, c) => sum + c.amount, 0);
 
@@ -134,8 +128,6 @@ export function computeMonth(data: FinanceData, month: string) {
     costTotal,
     incomeTotal,
     balance: incomeTotal - costTotal,
-    partialBalance: incomeTotal - paidCostTotal,
-    paidCostTotal,
     debitCosts,
     creditCosts,
     fixedSalary,

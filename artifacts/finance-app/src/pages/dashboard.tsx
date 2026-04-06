@@ -56,11 +56,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Custo total do mês" value={selectedSummary.costTotal} subtitle={`Débito ${currency.format(selectedSummary.debitCosts)} • Cartão ${currency.format(selectedSummary.creditCosts)}`} />
         <MetricCard title="Receita total do mês" value={selectedSummary.incomeTotal} subtitle={`Fixa ${currency.format(selectedSummary.fixedSalary)} • Extras ${currency.format(selectedSummary.extraIncome)}`} positive />
         <MetricCard title="Saldo do mês" value={selectedSummary.balance} subtitle={monthLabel(selectedMonth)} positive={selectedSummary.balance >= 0} />
-        <MetricCard title="Saldo parcial" value={selectedSummary.partialBalance} subtitle={`Pagas ${currency.format(selectedSummary.paidCostTotal)} do total`} positive={selectedSummary.partialBalance >= 0} />
         <MetricCard title="Saldo acumulado" value={accumulatedBalance} subtitle={`Próximos ${projectionSize} meses`} positive={accumulatedBalance >= 0} />
       </div>
 
@@ -105,7 +104,6 @@ export default function Dashboard() {
                 </div>
                 <p className="text-sm text-muted-foreground">Receita: {currency.format(month.incomeTotal)}</p>
                 <p className="text-sm text-muted-foreground">Custos: {currency.format(month.costTotal)}</p>
-                <p className="text-sm text-muted-foreground">Saldo parcial: {currency.format(month.partialBalance)}</p>
                 <p className="text-base font-semibold mt-1">Saldo: {currency.format(month.balance)}</p>
               </div>
             ))}
