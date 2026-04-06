@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ const emptyForm: CostForm = {
   owner: "",
   name: "",
   amount: 0,
+  paid: false,
   paymentType: "debit" as const,
   nature: "fixed" as const,
   category: "",
@@ -78,7 +79,17 @@ export default function Transactions() {
     setData((prev) => ({ ...prev, costs: prev.costs.filter((c) => c.id !== id) }));
   };
 
+  const togglePaid = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      costs: prev.costs.map((cost) => (cost.id === id ? { ...cost, paid: !cost.paid } : cost)),
+    }));
+  };
+
   const totalMonth = sorted.filter((c) => c.referenceMonth === selectedMonth).reduce((sum, c) => sum + c.amount, 0);
+  const totalPaidMonth = sorted
+    .filter((c) => c.referenceMonth === selectedMonth && c.paid)
+    .reduce((sum, c) => sum + c.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -167,7 +178,10 @@ export default function Transactions() {
       <Card>
         <CardHeader>
           <CardTitle>Resumo de {monthLabel(selectedMonth)}</CardTitle>
-          <CardDescription>Total do mês selecionado: {currency.format(totalMonth)}</CardDescription>
+          <CardDescription>
+            Previsto: {currency.format(totalMonth)} • Pago: {currency.format(totalPaidMonth)} • Pendente:{" "}
+            {currency.format(totalMonth - totalPaidMonth)}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {sorted.length === 0 ? (
@@ -184,12 +198,23 @@ export default function Transactions() {
                         {cost.category} • {cost.paymentType === "debit" ? "Débito" : "Cartão"} • {cost.nature === "fixed" ? "Fixo" : "Pontual"}
                       </p>
                       <p className="text-xs text-muted-foreground">
+                        Status: {cost.paid ? "Pago" : "Em aberto"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
                         Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração {cost.durationMonths} mês(es)
                       </p>
                       {cost.notes ? <p className="text-xs mt-1">Obs: {cost.notes}</p> : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-lg min-w-[130px] text-right">{currency.format(cost.amount)}</p>
+                      <Button
+                        variant={cost.paid ? "secondary" : "outline"}
+                        size="icon"
+                        onClick={() => togglePaid(cost.id)}
+                        title={cost.paid ? "Marcar como não pago" : "Marcar como pago"}
+                      >
+                        {cost.paid ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+                      </Button>
                       <Button variant="outline" size="icon" onClick={() => editCost(cost)}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="destructive" size="icon" onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4" /></Button>
                     </div>

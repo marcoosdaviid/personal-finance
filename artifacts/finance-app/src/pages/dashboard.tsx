@@ -59,7 +59,12 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Custo total do mês" value={selectedSummary.costTotal} subtitle={`Débito ${currency.format(selectedSummary.debitCosts)} • Cartão ${currency.format(selectedSummary.creditCosts)}`} />
         <MetricCard title="Receita total do mês" value={selectedSummary.incomeTotal} subtitle={`Fixa ${currency.format(selectedSummary.fixedSalary)} • Extras ${currency.format(selectedSummary.extraIncome)}`} positive />
-        <MetricCard title="Saldo do mês" value={selectedSummary.balance} subtitle={monthLabel(selectedMonth)} positive={selectedSummary.balance >= 0} />
+        <MetricCard
+          title="Saldo parcial do mês"
+          value={selectedSummary.partialBalance}
+          subtitle={`Pagas ${currency.format(selectedSummary.paidCostTotal)} • ${monthLabel(selectedMonth)}`}
+          positive={selectedSummary.partialBalance >= 0}
+        />
         <MetricCard title="Saldo acumulado" value={accumulatedBalance} subtitle={`Próximos ${projectionSize} meses`} positive={accumulatedBalance >= 0} />
       </div>
 
