@@ -56,10 +56,32 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Custo total do mês" value={selectedSummary.costTotal} subtitle={`Débito ${currency.format(selectedSummary.debitCosts)} • Cartão ${currency.format(selectedSummary.creditCosts)}`} />
-        <MetricCard title="Receita total do mês" value={selectedSummary.incomeTotal} subtitle={`Fixa ${currency.format(selectedSummary.fixedSalary)} • Extras ${currency.format(selectedSummary.extraIncome)}`} positive />
-        <MetricCard title="Saldo do mês" value={selectedSummary.balance} subtitle={monthLabel(selectedMonth)} positive={selectedSummary.balance >= 0} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardDescription>Resumo do mês</CardDescription>
+            <CardTitle>{monthLabel(selectedMonth)}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <MetricTile
+              label="Saldo"
+              value={selectedSummary.balance}
+              positive={selectedSummary.balance >= 0}
+              helperText={selectedSummary.balance >= 0 ? "Positivo" : "Negativo"}
+            />
+            <MetricTile
+              label="Despesa"
+              value={selectedSummary.costTotal}
+              helperText={`Débito ${currency.format(selectedSummary.debitCosts)} • Cartão ${currency.format(selectedSummary.creditCosts)}`}
+            />
+            <MetricTile
+              label="Receita"
+              value={selectedSummary.incomeTotal}
+              positive
+              helperText={`Fixa ${currency.format(selectedSummary.fixedSalary)} • Extras ${currency.format(selectedSummary.extraIncome)}`}
+            />
+          </CardContent>
+        </Card>
         <MetricCard title="Saldo acumulado" value={accumulatedBalance} subtitle={`Próximos ${projectionSize} meses`} positive={accumulatedBalance >= 0} />
       </div>
 
@@ -123,5 +145,15 @@ function MetricCard({ title, value, subtitle, positive }: { title: string; value
       </CardHeader>
       {subtitle ? <CardContent className="pt-0 text-xs text-muted-foreground">{subtitle}</CardContent> : null}
     </Card>
+  );
+}
+
+function MetricTile({ label, value, helperText, positive }: { label: string; value: number; helperText?: string; positive?: boolean }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className={`text-xl font-semibold ${positive === undefined ? "" : positive ? "text-emerald-600" : "text-red-600"}`}>{currency.format(value)}</p>
+      {helperText ? <p className="mt-1 text-xs text-muted-foreground">{helperText}</p> : null}
+    </div>
   );
 }
