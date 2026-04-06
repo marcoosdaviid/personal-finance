@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,7 +28,6 @@ const emptyForm: CostForm = {
 export default function Transactions() {
   const { data, setData } = useFinanceStore();
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
-  const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CostForm>(emptyForm);
 
@@ -61,14 +59,12 @@ export default function Transactions() {
       costs: editingId ? prev.costs.map((c) => (c.id === editingId ? payload : c)) : [payload, ...prev.costs],
     }));
 
-    setIsOpen(false);
     resetForm();
   };
 
   const editCost = (cost: CostEntry) => {
     setEditingId(cost.id);
     setForm(cost);
-    setIsOpen(true);
   };
 
   const deleteCost = (id: string) => {
@@ -86,71 +82,76 @@ export default function Transactions() {
         </div>
         <div className="flex gap-2">
           <Input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-[180px]" />
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="h-4 w-4 mr-2" /> Novo custo
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[640px]">
-              <DialogHeader>
-                <DialogTitle>{editingId ? "Editar custo" : "Novo custo"}</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <Label>Nome / descrição</Label>
-                  <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Valor</Label>
-                  <Input type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))} />
-                </div>
-                <div>
-                  <Label>Categoria</Label>
-                  <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Ex: Moradia" />
-                </div>
-                <div>
-                  <Label>Pagamento</Label>
-                  <Select value={form.paymentType} onValueChange={(v: "debit" | "credit") => setForm((f) => ({ ...f, paymentType: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="debit">Débito</SelectItem>
-                      <SelectItem value="credit">Cartão de crédito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Tipo</Label>
-                  <Select value={form.nature} onValueChange={(v: "fixed" | "one_time") => setForm((f) => ({ ...f, nature: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">Fixo</SelectItem>
-                      <SelectItem value="one_time">Pontual</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Mês de referência</Label>
-                  <Input type="month" value={form.referenceMonth} onChange={(e) => setForm((f) => ({ ...f, referenceMonth: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Recorrência (meses)</Label>
-                  <Input type="number" min={1} value={form.recurrenceMonths} onChange={(e) => setForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
-                </div>
-                <div>
-                  <Label>Quantidade de parcelas / duração</Label>
-                  <Input type="number" min={1} value={form.durationMonths} onChange={(e) => setForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))} />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Observações</Label>
-                  <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-                </div>
-              </div>
-              <Button onClick={saveCost}>{editingId ? "Salvar alterações" : "Cadastrar custo"}</Button>
-            </DialogContent>
-          </Dialog>
+          <Button variant="outline" onClick={resetForm}>
+            <Plus className="h-4 w-4 mr-2" /> Limpar formulário
+          </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{editingId ? "Editar custo" : "Novo custo"}</CardTitle>
+          <CardDescription>Preencha o formulário abaixo para cadastrar ou atualizar uma despesa.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <Label>Nome / descrição</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Valor</Label>
+              <Input type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))} />
+            </div>
+            <div>
+              <Label>Categoria</Label>
+              <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Ex: Moradia" />
+            </div>
+            <div>
+              <Label>Pagamento</Label>
+              <Select value={form.paymentType} onValueChange={(v: "debit" | "credit") => setForm((f) => ({ ...f, paymentType: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="debit">Débito</SelectItem>
+                  <SelectItem value="credit">Cartão de crédito</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Tipo</Label>
+              <Select value={form.nature} onValueChange={(v: "fixed" | "one_time") => setForm((f) => ({ ...f, nature: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixo</SelectItem>
+                  <SelectItem value="one_time">Pontual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Mês de referência</Label>
+              <Input type="month" value={form.referenceMonth} onChange={(e) => setForm((f) => ({ ...f, referenceMonth: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Recorrência (meses)</Label>
+              <Input type="number" min={1} value={form.recurrenceMonths} onChange={(e) => setForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
+            </div>
+            <div>
+              <Label>Quantidade de parcelas / duração</Label>
+              <Input type="number" min={1} value={form.durationMonths} onChange={(e) => setForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))} />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Observações</Label>
+              <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={saveCost}>{editingId ? "Salvar alterações" : "Cadastrar custo"}</Button>
+            {editingId ? (
+              <Button variant="ghost" onClick={resetForm}>Cancelar edição</Button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

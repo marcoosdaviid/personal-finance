@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,8 +25,6 @@ const extraInitial: IncomeForm = {
 
 export default function Incomes() {
   const { data, setData } = useFinanceStore();
-  const [isExtraOpen, setIsExtraOpen] = useState(false);
-  const [isSalaryOpen, setIsSalaryOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [extraForm, setExtraForm] = useState<IncomeForm>(extraInitial);
   const [salaryForm, setSalaryForm] = useState({ effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
@@ -48,7 +45,6 @@ export default function Incomes() {
     }));
     setExtraForm(extraInitial);
     setEditingId(null);
-    setIsExtraOpen(false);
   };
 
   const saveSalary = () => {
@@ -65,7 +61,6 @@ export default function Incomes() {
       salaryHistory: [...prev.salaryHistory, payload].sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)),
     }));
     setSalaryForm({ effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
-    setIsSalaryOpen(false);
   };
 
   return (
@@ -82,31 +77,27 @@ export default function Incomes() {
               <CardTitle>Histórico da receita fixa mensal</CardTitle>
               <CardDescription>Mantenha mudanças de salário por mês de vigência.</CardDescription>
             </div>
-            <Dialog open={isSalaryOpen} onOpenChange={setIsSalaryOpen}>
-              <DialogTrigger asChild>
-                <Button><Plus className="h-4 w-4 mr-2" /> Nova mudança</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Alterar receita fixa</DialogTitle></DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label>A partir do mês</Label>
-                    <Input type="month" value={salaryForm.effectiveMonth} onChange={(e) => setSalaryForm((f) => ({ ...f, effectiveMonth: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>Novo valor da receita fixa</Label>
-                    <Input type="number" min={0} step="0.01" value={salaryForm.value} onChange={(e) => setSalaryForm((f) => ({ ...f, value: Number(e.target.value) }))} />
-                  </div>
-                  <div>
-                    <Label>Observações</Label>
-                    <Textarea value={salaryForm.notes} onChange={(e) => setSalaryForm((f) => ({ ...f, notes: e.target.value }))} />
-                  </div>
-                  <Button onClick={saveSalary}>Salvar mudança</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => setSalaryForm({ effectiveMonth: getCurrentMonth(), value: 0, notes: "" })}>
+              <Plus className="h-4 w-4 mr-2" /> Limpar formulário
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <div className="space-y-3 rounded-lg border p-4">
+              <p className="font-medium">Registrar mudança de receita fixa</p>
+              <div>
+                <Label>A partir do mês</Label>
+                <Input type="month" value={salaryForm.effectiveMonth} onChange={(e) => setSalaryForm((f) => ({ ...f, effectiveMonth: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Novo valor da receita fixa</Label>
+                <Input type="number" min={0} step="0.01" value={salaryForm.value} onChange={(e) => setSalaryForm((f) => ({ ...f, value: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Textarea value={salaryForm.notes} onChange={(e) => setSalaryForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <Button onClick={saveSalary}>Salvar mudança</Button>
+            </div>
             {data.salaryHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem histórico de salário ainda.</p>
             ) : (
@@ -127,55 +118,58 @@ export default function Incomes() {
               <CardTitle>Receitas extras</CardTitle>
               <CardDescription>Receita adicional, bônus e entradas pontuais.</CardDescription>
             </div>
-            <Dialog open={isExtraOpen} onOpenChange={setIsExtraOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline"><Plus className="h-4 w-4 mr-2" /> Nova receita</Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[640px]">
-                <DialogHeader><DialogTitle>{editingId ? "Editar receita" : "Nova receita"}</DialogTitle></DialogHeader>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <Label>Nome</Label>
-                    <Input value={extraForm.name} onChange={(e) => setExtraForm((f) => ({ ...f, name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>Valor</Label>
-                    <Input type="number" min={0} step="0.01" value={extraForm.amount} onChange={(e) => setExtraForm((f) => ({ ...f, amount: Number(e.target.value) }))} />
-                  </div>
-                  <div>
-                    <Label>Tipo</Label>
-                    <Select value={extraForm.type} onValueChange={(v: IncomeEntry["type"]) => setExtraForm((f) => ({ ...f, type: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">Receita fixa mensal</SelectItem>
-                        <SelectItem value="additional">Receita adicional</SelectItem>
-                        <SelectItem value="bonus">Bônus / extra</SelectItem>
-                        <SelectItem value="one_time">Entrada pontual</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Mês de referência</Label>
-                    <Input type="month" value={extraForm.referenceMonth} onChange={(e) => setExtraForm((f) => ({ ...f, referenceMonth: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>Recorrência (meses)</Label>
-                    <Input type="number" min={1} value={extraForm.recurrenceMonths} onChange={(e) => setExtraForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
-                  </div>
-                  <div>
-                    <Label>Duração (meses)</Label>
-                    <Input type="number" min={1} value={extraForm.durationMonths} onChange={(e) => setExtraForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Observações</Label>
-                    <Textarea value={extraForm.notes} onChange={(e) => setExtraForm((f) => ({ ...f, notes: e.target.value }))} />
-                  </div>
-                </div>
-                <Button onClick={saveExtra}>{editingId ? "Salvar alterações" : "Cadastrar receita"}</Button>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => { setExtraForm(extraInitial); setEditingId(null); }}>
+              <Plus className="h-4 w-4 mr-2" /> Limpar formulário
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <div className="space-y-4 rounded-lg border p-4">
+              <p className="font-medium">{editingId ? "Editar receita extra" : "Nova receita extra"}</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <Label>Nome</Label>
+                  <Input value={extraForm.name} onChange={(e) => setExtraForm((f) => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Valor</Label>
+                  <Input type="number" min={0} step="0.01" value={extraForm.amount} onChange={(e) => setExtraForm((f) => ({ ...f, amount: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={extraForm.type} onValueChange={(v: IncomeEntry["type"]) => setExtraForm((f) => ({ ...f, type: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">Receita fixa mensal</SelectItem>
+                      <SelectItem value="additional">Receita adicional</SelectItem>
+                      <SelectItem value="bonus">Bônus / extra</SelectItem>
+                      <SelectItem value="one_time">Entrada pontual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Mês de referência</Label>
+                  <Input type="month" value={extraForm.referenceMonth} onChange={(e) => setExtraForm((f) => ({ ...f, referenceMonth: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Recorrência (meses)</Label>
+                  <Input type="number" min={1} value={extraForm.recurrenceMonths} onChange={(e) => setExtraForm((f) => ({ ...f, recurrenceMonths: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label>Duração (meses)</Label>
+                  <Input type="number" min={1} value={extraForm.durationMonths} onChange={(e) => setExtraForm((f) => ({ ...f, durationMonths: Number(e.target.value) }))} />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea value={extraForm.notes} onChange={(e) => setExtraForm((f) => ({ ...f, notes: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={saveExtra}>{editingId ? "Salvar alterações" : "Cadastrar receita"}</Button>
+                {editingId ? (
+                  <Button variant="ghost" onClick={() => { setExtraForm(extraInitial); setEditingId(null); }}>Cancelar edição</Button>
+                ) : null}
+              </div>
+            </div>
             {data.incomes.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem receitas extras cadastradas.</p>
             ) : (
@@ -187,7 +181,7 @@ export default function Incomes() {
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="font-semibold">{currency.format(income.amount)}</p>
-                    <Button variant="outline" size="icon" onClick={() => { setEditingId(income.id); setExtraForm(income); setIsExtraOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => { setEditingId(income.id); setExtraForm(income); }}><Pencil className="h-4 w-4" /></Button>
                     <Button variant="destructive" size="icon" onClick={() => setData((prev) => ({ ...prev, incomes: prev.incomes.filter((i) => i.id !== income.id) }))}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
