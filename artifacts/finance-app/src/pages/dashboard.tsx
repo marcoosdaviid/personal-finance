@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { addMonths, format, parse } from "date-fns";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,7 @@ import { buildProjection, computeMonth, getCurrentMonth, monthLabel } from "@/li
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function Dashboard() {
-  const { data } = useFinanceStore();
+  const { data, setData } = useFinanceStore();
   const currentMonth = getCurrentMonth();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [projectionSize, setProjectionSize] = useState<"6" | "12">("6");
@@ -32,6 +33,7 @@ export default function Dashboard() {
   );
 
   const accumulatedBalance = projection.reduce((sum, m) => sum + m.balance, 0);
+  const manualInvoiceValue = data.manualCreditInvoices[selectedMonth];
 
   return (
     <div className="space-y-6">
@@ -84,6 +86,55 @@ export default function Dashboard() {
         </Card>
         <MetricCard title="Saldo acumulado" value={accumulatedBalance} subtitle={`Próximos ${projectionSize} meses`} positive={accumulatedBalance >= 0} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Fatura de cartão manual</CardTitle>
+          <CardDescription>
+            Ao informar a fatura manual de {monthLabel(selectedMonth)}, o cálculo ignora as despesas no crédito desse mês e usa somente o valor informado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:max-w-sm">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="Ex: 1850,00"
+            value={manualInvoiceValue ?? ""}
+            onChange={(e) => {
+              const value = e.target.value;
+              setData((prev) => {
+                const nextInvoices = { ...prev.manualCreditInvoices };
+                if (value === "") {
+                  delete nextInvoices[selectedMonth];
+                } else {
+                  nextInvoices[selectedMonth] = Number(value);
+                }
+                return {
+                  ...prev,
+                  manualCreditInvoices: nextInvoices,
+                };
+              });
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Deixe em branco para voltar ao cálculo automático da fatura ({currency.format(selectedSummary.calculatedCreditCosts)}).
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Despesas separadas por tipo</CardTitle>
+          <CardDescription>Detalhamento das despesas do mês selecionado.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricTile label="Despesa no Débito Fixa" value={selectedSummary.debitFixedCosts} />
+          <MetricTile label="Despesa no Débito Pontual" value={selectedSummary.debitOneTimeCosts} />
+          <MetricTile label="Despesa no Crédito Fixa" value={selectedSummary.creditFixedCosts} />
+          <MetricTile label="Despesa no Crédito Pontual" value={selectedSummary.creditOneTimeCosts} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
