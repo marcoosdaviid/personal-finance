@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFinanceStore } from "@/hooks/use-finance-store";
+import { useToast } from "@/hooks/use-toast";
 import { CostEntry, getCurrentMonth, monthLabel, uid } from "@/lib/finance";
+import { parseChatEntry } from "@/lib/chat-entry-parser";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -28,9 +30,11 @@ const emptyForm: CostForm = {
 
 export default function Transactions() {
   const { data, setData } = useFinanceStore();
+  const { toast } = useToast();
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CostForm>(emptyForm);
+  const [chatInput, setChatInput] = useState("");
 
   const monthCosts = useMemo(
     () => data.costs.filter((c) => c.referenceMonth <= selectedMonth),
@@ -78,10 +82,57 @@ export default function Transactions() {
     setData((prev) => ({ ...prev, costs: prev.costs.filter((c) => c.id !== id) }));
   };
 
+  const insertFromChat = () => {
+    try {
+      const parsed = parseChatEntry(chatInput);
+      if (parsed.kind !== "cost") {
+        toast({
+          title: "Mensagem reconhecida como receita",
+          description: "Use a página de receitas para lançar esse tipo de entrada via chat.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setData((prev) => ({
+        ...prev,
+        costs: [{ id: uid(), ...parsed.payload }, ...prev.costs],
+      }));
+      setChatInput("");
+      toast({
+        title: "Despesa lançada com sucesso",
+        description: `${parsed.payload.name} • ${currency.format(parsed.payload.amount)}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Não consegui interpretar a mensagem",
+        description: error instanceof Error ? error.message : "Tente informar valor, tipo e descrição na mensagem.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const totalMonth = sorted.filter((c) => c.referenceMonth === selectedMonth).reduce((sum, c) => sum + c.amount, 0);
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Lançamento por chat (LLM)</CardTitle>
+          <CardDescription>
+            Escreva em linguagem natural, por exemplo: &quot;Despesa de mercado de R$ 320 no crédito para David em abril de 2026, categoria alimentação&quot;.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            placeholder="Digite a despesa em linguagem natural..."
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+          />
+          <Button onClick={insertFromChat}>Inserir despesa via chat</Button>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
         <div>
           <h1 className="text-3xl font-bold">Custos / Despesas</h1>

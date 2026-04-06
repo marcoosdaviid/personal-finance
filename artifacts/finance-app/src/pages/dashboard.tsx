@@ -75,6 +75,7 @@ export default function Dashboard() {
   );
 
   const accumulatedBalance = projection.reduce((sum, m) => sum + m.balance, 0);
+  const manualInvoiceValue = data.manualCreditInvoices[selectedMonth];
 
   return (
     <div className="space-y-6">
@@ -240,5 +241,15 @@ function MetricCard({ title, value, subtitle, positive }: { title: string; value
       </CardHeader>
       {subtitle ? <CardContent className="pt-0 text-xs text-muted-foreground">{subtitle}</CardContent> : null}
     </Card>
+  );
+}
+
+function MetricTile({ label, value, helperText, positive }: { label: string; value: number; helperText?: string; positive?: boolean }) {
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className={`text-xl font-semibold ${positive === undefined ? "" : positive ? "text-emerald-600" : "text-red-600"}`}>{currency.format(value)}</p>
+      {helperText ? <p className="mt-1 text-xs text-muted-foreground">{helperText}</p> : null}
+    </div>
   );
 }
