@@ -14,6 +14,7 @@ const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "
 type CostForm = Omit<CostEntry, "id">;
 
 const emptyForm: CostForm = {
+  owner: "",
   name: "",
   amount: 0,
   paymentType: "debit" as const,
@@ -37,6 +38,12 @@ export default function Transactions() {
   );
 
   const sorted = [...monthCosts].sort((a, b) => b.referenceMonth.localeCompare(a.referenceMonth));
+  const groupedCosts = sorted.reduce<Record<string, CostEntry[]>>((acc, cost) => {
+    const owner = cost.owner || "Não informado";
+    if (!acc[owner]) acc[owner] = [];
+    acc[owner].push(cost);
+    return acc;
+  }, {});
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -52,7 +59,7 @@ export default function Transactions() {
       durationMonths: Number(form.durationMonths),
     };
 
-    if (!payload.name || !payload.category || payload.amount <= 0) return;
+    if (!payload.owner || !payload.name || !payload.category || payload.amount <= 0) return;
 
     setData((prev) => ({
       ...prev,
@@ -95,6 +102,10 @@ export default function Transactions() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <Label>Dono da despesa</Label>
+              <Input value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} placeholder="Ex: David ou Rute" />
+            </div>
             <div className="md:col-span-2">
               <Label>Nome / descrição</Label>
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
@@ -162,23 +173,28 @@ export default function Transactions() {
           {sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhum custo cadastrado.</p>
           ) : (
-            sorted.map((cost) => (
-              <div key={cost.id} className="rounded-lg border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-semibold">{cost.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {cost.category} • {cost.paymentType === "debit" ? "Débito" : "Cartão"} • {cost.nature === "fixed" ? "Fixo" : "Pontual"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração {cost.durationMonths} mês(es)
-                  </p>
-                  {cost.notes ? <p className="text-xs mt-1">Obs: {cost.notes}</p> : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-lg min-w-[130px] text-right">{currency.format(cost.amount)}</p>
-                  <Button variant="outline" size="icon" onClick={() => editCost(cost)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="destructive" size="icon" onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4" /></Button>
-                </div>
+            Object.entries(groupedCosts).map(([owner, costs]) => (
+              <div key={owner} className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{owner}</h3>
+                {costs.map((cost) => (
+                  <div key={cost.id} className="rounded-lg border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="font-semibold">{cost.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {cost.category} • {cost.paymentType === "debit" ? "Débito" : "Cartão"} • {cost.nature === "fixed" ? "Fixo" : "Pontual"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Referência {monthLabel(cost.referenceMonth)} • Recorrência {cost.recurrenceMonths} mês(es) • Duração {cost.durationMonths} mês(es)
+                      </p>
+                      {cost.notes ? <p className="text-xs mt-1">Obs: {cost.notes}</p> : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-lg min-w-[130px] text-right">{currency.format(cost.amount)}</p>
+                      <Button variant="outline" size="icon" onClick={() => editCost(cost)}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="destructive" size="icon" onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))
           )}

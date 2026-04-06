@@ -6,6 +6,7 @@ export type IncomeType = "fixed" | "additional" | "bonus" | "one_time";
 
 export type CostEntry = {
   id: string;
+  owner: string;
   name: string;
   amount: number;
   paymentType: PaymentType;
@@ -19,6 +20,7 @@ export type CostEntry = {
 
 export type IncomeEntry = {
   id: string;
+  owner: string;
   name: string;
   amount: number;
   type: IncomeType;
@@ -30,6 +32,7 @@ export type IncomeEntry = {
 
 export type SalaryChange = {
   id: string;
+  owner: string;
   effectiveMonth: string;
   value: number;
   notes?: string;
@@ -60,11 +63,11 @@ export function loadFinanceData(): FinanceData {
     if (!raw) return emptyFinanceData;
     const parsed = JSON.parse(raw) as Partial<FinanceData>;
     return {
-      costs: parsed.costs ?? [],
-      incomes: parsed.incomes ?? [],
-      salaryHistory: (parsed.salaryHistory ?? []).sort((a, b) =>
-        a.effectiveMonth.localeCompare(b.effectiveMonth),
-      ),
+      costs: (parsed.costs ?? []).map((cost) => ({ ...cost, owner: cost.owner ?? "Não informado" })),
+      incomes: (parsed.incomes ?? []).map((income) => ({ ...income, owner: income.owner ?? "Não informado" })),
+      salaryHistory: (parsed.salaryHistory ?? [])
+        .map((salary) => ({ ...salary, owner: salary.owner ?? "Não informado" }))
+        .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)),
     };
   } catch {
     return emptyFinanceData;
@@ -93,10 +96,17 @@ function activeInMonth(startMonth: string, recurrenceMonths: number, durationMon
 }
 
 export function computeMonth(data: FinanceData, month: string) {
-  const fixedSalary = [...data.salaryHistory]
-    .filter((s) => s.effectiveMonth <= month)
-    .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth))
-    .at(-1)?.value ?? 0;
+  const fixedSalary = Object.values(
+    data.salaryHistory
+      .filter((s) => s.effectiveMonth <= month)
+      .reduce<Record<string, SalaryChange>>((acc, salary) => {
+        const current = acc[salary.owner];
+        if (!current || current.effectiveMonth <= salary.effectiveMonth) {
+          acc[salary.owner] = salary;
+        }
+        return acc;
+      }, {}),
+  ).reduce((sum, salary) => sum + salary.value, 0);
 
   const costs = data.costs.filter((c) =>
     activeInMonth(c.referenceMonth, c.recurrenceMonths, c.durationMonths, month),

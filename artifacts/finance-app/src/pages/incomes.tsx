@@ -14,6 +14,7 @@ const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "
 type IncomeForm = Omit<IncomeEntry, "id">;
 
 const extraInitial: IncomeForm = {
+  owner: "",
   name: "",
   amount: 0,
   type: "additional" as const,
@@ -27,7 +28,19 @@ export default function Incomes() {
   const { data, setData } = useFinanceStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [extraForm, setExtraForm] = useState<IncomeForm>(extraInitial);
-  const [salaryForm, setSalaryForm] = useState({ effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
+  const [salaryForm, setSalaryForm] = useState({ owner: "", effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
+  const groupedIncomes = data.incomes.reduce<Record<string, IncomeEntry[]>>((acc, income) => {
+    const owner = income.owner || "Não informado";
+    if (!acc[owner]) acc[owner] = [];
+    acc[owner].push(income);
+    return acc;
+  }, {});
+  const groupedSalaryHistory = data.salaryHistory.reduce<Record<string, SalaryChange[]>>((acc, salary) => {
+    const owner = salary.owner || "Não informado";
+    if (!acc[owner]) acc[owner] = [];
+    acc[owner].push(salary);
+    return acc;
+  }, {});
 
   const saveExtra = () => {
     const payload: IncomeEntry = {
@@ -37,7 +50,7 @@ export default function Incomes() {
       recurrenceMonths: Number(extraForm.recurrenceMonths),
       durationMonths: Number(extraForm.durationMonths),
     };
-    if (!payload.name || payload.amount <= 0) return;
+    if (!payload.owner || !payload.name || payload.amount <= 0) return;
 
     setData((prev) => ({
       ...prev,
@@ -48,9 +61,10 @@ export default function Incomes() {
   };
 
   const saveSalary = () => {
-    if (salaryForm.value <= 0) return;
+    if (!salaryForm.owner || salaryForm.value <= 0) return;
     const payload: SalaryChange = {
       id: uid(),
+      owner: salaryForm.owner,
       effectiveMonth: salaryForm.effectiveMonth,
       value: Number(salaryForm.value),
       notes: salaryForm.notes,
@@ -60,7 +74,7 @@ export default function Incomes() {
       ...prev,
       salaryHistory: [...prev.salaryHistory, payload].sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)),
     }));
-    setSalaryForm({ effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
+    setSalaryForm({ owner: "", effectiveMonth: getCurrentMonth(), value: 0, notes: "" });
   };
 
   return (
@@ -77,13 +91,17 @@ export default function Incomes() {
               <CardTitle>Histórico da receita fixa mensal</CardTitle>
               <CardDescription>Mantenha mudanças de salário por mês de vigência.</CardDescription>
             </div>
-            <Button variant="outline" onClick={() => setSalaryForm({ effectiveMonth: getCurrentMonth(), value: 0, notes: "" })}>
+            <Button variant="outline" onClick={() => setSalaryForm({ owner: "", effectiveMonth: getCurrentMonth(), value: 0, notes: "" })}>
               <Plus className="h-4 w-4 mr-2" /> Limpar formulário
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3 rounded-lg border p-4">
               <p className="font-medium">Registrar mudança de receita fixa</p>
+              <div>
+                <Label>Dono da receita fixa</Label>
+                <Input value={salaryForm.owner} onChange={(e) => setSalaryForm((f) => ({ ...f, owner: e.target.value }))} placeholder="Ex: David ou Rute" />
+              </div>
               <div>
                 <Label>A partir do mês</Label>
                 <Input type="month" value={salaryForm.effectiveMonth} onChange={(e) => setSalaryForm((f) => ({ ...f, effectiveMonth: e.target.value }))} />
@@ -101,11 +119,16 @@ export default function Incomes() {
             {data.salaryHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem histórico de salário ainda.</p>
             ) : (
-              data.salaryHistory.map((change) => (
-                <div key={change.id} className="rounded-lg border p-3">
-                  <p className="font-medium">A partir de {monthLabel(change.effectiveMonth)}</p>
-                  <p className="text-lg font-semibold">{currency.format(change.value)}</p>
-                  {change.notes ? <p className="text-xs text-muted-foreground">{change.notes}</p> : null}
+              Object.entries(groupedSalaryHistory).map(([owner, changes]) => (
+                <div key={owner} className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{owner}</p>
+                  {changes.map((change) => (
+                    <div key={change.id} className="rounded-lg border p-3">
+                      <p className="font-medium">A partir de {monthLabel(change.effectiveMonth)}</p>
+                      <p className="text-lg font-semibold">{currency.format(change.value)}</p>
+                      {change.notes ? <p className="text-xs text-muted-foreground">{change.notes}</p> : null}
+                    </div>
+                  ))}
                 </div>
               ))
             )}
@@ -126,6 +149,10 @@ export default function Incomes() {
             <div className="space-y-4 rounded-lg border p-4">
               <p className="font-medium">{editingId ? "Editar receita extra" : "Nova receita extra"}</p>
               <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <Label>Dono da receita</Label>
+                  <Input value={extraForm.owner} onChange={(e) => setExtraForm((f) => ({ ...f, owner: e.target.value }))} placeholder="Ex: David ou Rute" />
+                </div>
                 <div className="md:col-span-2">
                   <Label>Nome</Label>
                   <Input value={extraForm.name} onChange={(e) => setExtraForm((f) => ({ ...f, name: e.target.value }))} />
@@ -173,17 +200,22 @@ export default function Incomes() {
             {data.incomes.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem receitas extras cadastradas.</p>
             ) : (
-              data.incomes.map((income) => (
-                <div key={income.id} className="rounded-lg border p-3 flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{income.name}</p>
-                    <p className="text-xs text-muted-foreground">{income.type} • {monthLabel(income.referenceMonth)} • {income.durationMonths} mês(es)</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold">{currency.format(income.amount)}</p>
-                    <Button variant="outline" size="icon" onClick={() => { setEditingId(income.id); setExtraForm(income); }}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="destructive" size="icon" onClick={() => setData((prev) => ({ ...prev, incomes: prev.incomes.filter((i) => i.id !== income.id) }))}><Trash2 className="h-4 w-4" /></Button>
-                  </div>
+              Object.entries(groupedIncomes).map(([owner, incomes]) => (
+                <div key={owner} className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{owner}</p>
+                  {incomes.map((income) => (
+                    <div key={income.id} className="rounded-lg border p-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{income.name}</p>
+                        <p className="text-xs text-muted-foreground">{income.type} • {monthLabel(income.referenceMonth)} • {income.durationMonths} mês(es)</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold">{currency.format(income.amount)}</p>
+                        <Button variant="outline" size="icon" onClick={() => { setEditingId(income.id); setExtraForm(income); }}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="destructive" size="icon" onClick={() => setData((prev) => ({ ...prev, incomes: prev.incomes.filter((i) => i.id !== income.id) }))}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))
             )}
